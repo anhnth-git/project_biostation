@@ -1,0 +1,23 @@
+{
+  "name": "project-biostation",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "extract:employee-faces": "powershell -ExecutionPolicy Bypass -File .\\extract-employee-faces.ps1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@faker-js/faker": "^9.9.0",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^25.6.0"
+  },
+  "dependencies": {
+    "archiver": "^8.0.0",
+    "axios": "^1.16.0",
+    "form-data": "^4.0.5",
+    "zod": "^4.4.3"
+  }
+}
