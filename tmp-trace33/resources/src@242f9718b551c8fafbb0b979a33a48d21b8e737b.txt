@@ -1,0 +1,68 @@
+import { expect, test } from '../../../src/fixtures/api.fixture';
+import { PassengerApi } from '../../../src/api/passenger.api';
+import { TokenApi } from '../../../src/api/token.api';
+import { VerifyBoardingPassApi } from '../../../src/api/verify-boarding-pass.api';
+import { data } from './create-token.data';
+
+const DUPLICATE_FACE_STATUS_CODE = '[242]';
+
+const createTokenWithFreshFace = async (tokenApi: TokenApi, attempts = 5) => {
+  let lastError: Error | undefined;
+
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await tokenApi.createSuccess(data.datacase1);
+    } catch (error) {
+      if (!(error instanceof Error) || !error.message.includes(DUPLICATE_FACE_STATUS_CODE)) {
+        throw error;
+      }
+
+      lastError = error;
+    }
+  }
+
+  throw lastError ?? new Error('Create token failed after exhausting fresh face-photo attempts');
+};
+
+test.describe('API Create Token', () => {
+  test.describe.configure({ mode: 'serial' });
+  
+  let tokenApi: TokenApi;
+
+  test.beforeEach(async ({ counterContext, preverifiedPassenger }) => {
+    tokenApi = new TokenApi(counterContext, preverifiedPassenger.passengerId);
+  });
+
+  test('Create Token -01: Tạo token sau khi passenger đã verify boarding pass', async ({ preverifiedPassenger }) => {
+    const responseJson = await createTokenWithFreshFace(tokenApi);
+    const { enrollChannel, ...expectedPassenger } = preverifiedPassenger.resCreatePassenger;
+
+    expect(responseJson.data.passengerId).toEqual(preverifiedPassenger.passengerId);
+    expect(responseJson.data.passenger).toMatchObject(expectedPassenger);
+    expect(responseJson.data.boardingPass.pdf417raw).toEqual(preverifiedPassenger.verifyPayload.barcode);
+  });
+
+  test('Create Token -02: Passenger thứ 2 verify lại vé cũ trả về 546', async ({ counterContext, preverifiedPassenger }) => {
+    await createTokenWithFreshFace(tokenApi);
+
+    const passengerApi = new PassengerApi(counterContext);
+    const secondPassenger = await passengerApi.createSuccess({
+      checkinType: 1,
+      enrollChannel: 2,
+      idNumber: `FIX${Date.now()}02`,
+      mrz: '219837647849',
+      documentType: 0,
+      fullName: 'Passenger Duplicate Ticket',
+      birthDate: '1999-11-23',
+      expiryDate: '2038-11-23',
+      termId: 0,
+      gender: 'M',
+      countryCode: 'string',
+    });
+
+    const verifyBoardingPassApi = new VerifyBoardingPassApi(counterContext, secondPassenger.id);
+    const responseJson = await verifyBoardingPassApi.verify(preverifiedPassenger.verifyPayload);
+
+    expect(String(responseJson.statusCode)).toBe('546');
+  });
+});

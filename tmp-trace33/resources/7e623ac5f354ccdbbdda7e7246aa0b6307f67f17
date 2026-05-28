@@ -1,0 +1,142 @@
+# Instructions
+
+- Following Playwright test failed.
+- Explain why, be concise, respect Playwright best practices.
+- Provide a snippet of code with the fix, if possible.
+
+# Test info
+
+- Name: contract\token\create-token.spec.ts >> API Create Token >> Create Token -02: Passenger thứ 2 verify lại vé cũ trả về 546
+- Location: tests\contract\token\create-token.spec.ts:45:7
+
+# Error details
+
+```
+Test timeout of 30000ms exceeded.
+```
+
+```
+Error: apiRequestContext.post: Request context disposed.
+Call log:
+  - → POST http://10.0.229.130:8086/api/v2/passenger/create
+    - user-agent: Playwright/1.59.1 (x64; windows 10.0) node/22.9
+    - accept: */*
+    - accept-encoding: gzip,deflate,br
+    - Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJuYW1laWQiOiI2IiwidW5pcXVlX25hbWUiOiJjb3VudGVyIiwicm9sZSI6IlVzZXIiLCJzY29wZSI6IkJJT19ERVZJQ0UiLCJ1c2VySWQiOiI2IiwiY2hhbm5lbCI6IkRvbUNvdW50ZXJBcHAiLCJjaGFubmVsSWQiOiI2IiwibmJmIjoxNzc5ODY4MjMxLCJleHAiOjE3Nzk5NzYyMzEsImlhdCI6MTc3OTg2ODIzMSwiaXNzIjoiRVRDIiwiYXVkIjoiRVRDIn0.KXDa3o-5bJJmA5Jde09kl7QFy1YgEGa8souwa6aMO0k
+    - content-type: application/json
+    - content-length: 243
+
+```
+
+# Test source
+
+```ts
+  1   | import { APIRequestContext, APIResponse } from '@playwright/test';
+  2   | 
+  3   | import {
+  4   |   PassengerEnvelopeSchema,
+  5   |   PassengerSuccessResponseSchema,
+  6   |   PassengerValidationErrorSchema,
+  7   |   type Passenger,
+  8   |   type PassengerEnvelope,
+  9   |   type PassengerValidationError,
+  10  | } from '../schemas/passenger.schema.js';
+  11  | 
+  12  | export type PassengerRequestBody = Record<string, unknown>;
+  13  | 
+  14  | const assertJsonResponse = (contentType: string | undefined, action: string) => {
+  15  |   if (!contentType?.includes('json')) {
+  16  |     throw new Error(`${action} returned unexpected content-type: ${contentType ?? 'missing'}`);
+  17  |   }
+  18  | };
+  19  | 
+  20  | const parsePassengerEnvelope = async (response: APIResponse): Promise<PassengerEnvelope> => {
+  21  |   assertJsonResponse(response.headers()['content-type'], 'Create passenger');
+  22  | 
+  23  |   const parsed = PassengerEnvelopeSchema.safeParse(await response.json());
+  24  |   if (!parsed.success) {
+  25  |     throw new Error(`Create passenger response validation failed:\n${parsed.error.message}`);
+  26  |   }
+  27  | 
+  28  |   return parsed.data;
+  29  | };
+  30  | 
+  31  | export const postCreatePassenger = (request: APIRequestContext, body: PassengerRequestBody) => {
+> 32  |   return request.post('passenger/create', {
+      |                  ^ Error: apiRequestContext.post: Request context disposed.
+  33  |     data: body,
+  34  |   });
+  35  | };
+  36  | 
+  37  | export async function createPassengerEnvelope(
+  38  |   request: APIRequestContext,
+  39  |   body: PassengerRequestBody,
+  40  | ): Promise<PassengerEnvelope> {
+  41  |   const res = await postCreatePassenger(request, body);
+  42  | 
+  43  |   if (!res.ok()) {
+  44  |     throw new Error(`Create passenger failed: ${res.status()} ${await res.text()}`);
+  45  |   }
+  46  | 
+  47  |   return parsePassengerEnvelope(res);
+  48  | }
+  49  | 
+  50  | export async function createPassengerSuccess(
+  51  |   request: APIRequestContext,
+  52  |   body: PassengerRequestBody,
+  53  | ): Promise<Passenger> {
+  54  |   const response = await createPassengerEnvelope(request, body);
+  55  | 
+  56  |   if (String(response.statusCode) !== '200') {
+  57  |     throw new Error(`Create passenger rejected by server: ${response.message ?? 'Unknown error'}`);
+  58  |   }
+  59  | 
+  60  |   const parsed = PassengerSuccessResponseSchema.safeParse(response);
+  61  |   if (!parsed.success) {
+  62  |     throw new Error(`Create passenger success validation failed:\n${parsed.error.message}`);
+  63  |   }
+  64  | 
+  65  |   return parsed.data.data;
+  66  | }
+  67  | 
+  68  | export async function createPassengerValidationError(
+  69  |   request: APIRequestContext,
+  70  |   body: PassengerRequestBody,
+  71  | ): Promise<PassengerValidationError> {
+  72  |   const res = await postCreatePassenger(request, body);
+  73  | 
+  74  |   if (res.status() !== 400) {
+  75  |     throw new Error(`Expected create passenger validation error: ${res.status()} ${await res.text()}`);
+  76  |   }
+  77  | 
+  78  |   assertJsonResponse(res.headers()['content-type'], 'Create passenger validation');
+  79  | 
+  80  |   const parsed = PassengerValidationErrorSchema.safeParse(await res.json());
+  81  |   if (!parsed.success) {
+  82  |     throw new Error(`Create passenger validation response failed:\n${parsed.error.message}`);
+  83  |   }
+  84  | 
+  85  |   return parsed.data;
+  86  | }
+  87  | 
+  88  | export class PassengerApi {
+  89  |   requestContext: APIRequestContext;
+  90  | 
+  91  |   constructor(request: APIRequestContext) {
+  92  |     this.requestContext = request;
+  93  |   }
+  94  | 
+  95  |   async create(body: PassengerRequestBody) {
+  96  |     return postCreatePassenger(this.requestContext, body);
+  97  |   }
+  98  | 
+  99  |   async createSuccess(body: PassengerRequestBody) {
+  100 |     return createPassengerSuccess(this.requestContext, body);
+  101 |   }
+  102 | 
+  103 |   async createInvalid(body: PassengerRequestBody) {
+  104 |     return createPassengerValidationError(this.requestContext, body);
+  105 |   }
+  106 | }
+  107 | 
+```

@@ -3,6 +3,11 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
+    "test": "playwright test --project=contract",
+    "test:contract": "playwright test --project=contract",
+    "test:e2e": "playwright test --project=e2e",
+    "test:smoke": "playwright test --project=smoke",
+    "test:list": "playwright test --list",
     "extract:employee-faces": "powershell -ExecutionPolicy Bypass -File .\\extract-employee-faces.ps1"
   },
   "keywords": [],
@@ -12,7 +17,8 @@
   "devDependencies": {
     "@faker-js/faker": "^9.9.0",
     "@playwright/test": "^1.59.1",
-    "@types/node": "^25.6.0"
+    "@types/node": "^25.9.1",
+    "dotenv": "^17.4.2"
   },
   "dependencies": {
     "archiver": "^8.0.0",
